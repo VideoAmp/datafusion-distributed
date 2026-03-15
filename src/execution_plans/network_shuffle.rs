@@ -17,6 +17,11 @@ use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
 use datafusion::physical_plan::{
     DisplayAs, DisplayFormatType, ExecutionPlan, ExecutionPlanProperties, PlanProperties,
 };
+use datafusion::physical_expr::PhysicalExpr;
+use datafusion::physical_plan::filter_pushdown::{
+    ChildPushdownResult, FilterDescription, FilterPushdownPhase, FilterPushdownPropagation,
+};
+use datafusion::config::ConfigOptions;
 use std::any::Any;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -261,5 +266,35 @@ impl ExecutionPlan for NetworkShuffleExec {
 
     fn metrics(&self) -> Option<MetricsSet> {
         Some(self.worker_connections.metrics.clone_inner())
+    }
+
+    fn gather_filters_for_pushdown(
+        &self,
+        _phase: FilterPushdownPhase,
+        parent_filters: Vec<Arc<dyn PhysicalExpr>>,
+        _config: &ConfigOptions,
+    ) -> Result<FilterDescription> {
+        // Pass through to child — NetworkShuffleExec is a distribution wrapper
+        // that shouldn't block filter propagation. Dynamic filters from joins
+        // (e.g., bloom filters on join keys) need to reach leaf scans through
+        // shuffle boundaries for cross-stage filter cascade (Q20, Q21).
+        use datafusion::physical_plan::filter_pushdown::ChildFilterDescription;
+        let children = self.children();
+        if let Some(child) = children.first() {
+            let child_desc = ChildFilterDescription::from_child(&parent_filters, child)?;
+            Ok(FilterDescription::new().with_child(child_desc))
+        } else {
+            // Encoded plan — can't push through
+            Ok(FilterDescription::all_unsupported(&parent_filters, &self.children()))
+        }
+    }
+
+    fn handle_child_pushdown_result(
+        &self,
+        _phase: FilterPushdownPhase,
+        child_pushdown_result: ChildPushdownResult,
+        _config: &ConfigOptions,
+    ) -> Result<FilterPushdownPropagation<Arc<dyn ExecutionPlan>>> {
+        Ok(FilterPushdownPropagation::if_any(child_pushdown_result))
     }
 }
