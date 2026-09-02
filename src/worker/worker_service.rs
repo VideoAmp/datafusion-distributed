@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use url::Url;
 
-const TASK_CACHE_TTI: Duration = Duration::from_mins(10);
+const TASK_CACHE_TTI: Duration = Duration::from_secs(60 * 10);
 
 pub(crate) type ResultTaskData = Result<TaskData, Arc<DataFusionError>>;
 pub(crate) type TaskDataEntries = Cache<TaskKey, Arc<SingleWriteMultiRead<ResultTaskData>>>;
