@@ -1,8 +1,13 @@
 use crate::DistributedTaskContext;
 use crate::common::require_one_child;
+use datafusion::config::ConfigOptions;
 use datafusion::execution::TaskContext;
+use datafusion::physical_expr::PhysicalExpr;
 use datafusion::physical_expr_common::metrics::MetricsSet;
 use datafusion::physical_plan::ExecutionPlanProperties;
+use datafusion::physical_plan::filter_pushdown::{
+    ChildPushdownResult, FilterDescription, FilterPushdownPhase, FilterPushdownPropagation,
+};
 use datafusion::physical_plan::metrics::{ExecutionPlanMetricsSet, MetricBuilder};
 use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
 use datafusion::{
@@ -191,6 +196,29 @@ impl ExecutionPlan for PartitionIsolatorExec {
 
     fn metrics(&self) -> Option<MetricsSet> {
         Some(self.metrics.clone_inner())
+    }
+
+    fn gather_filters_for_pushdown(
+        &self,
+        _phase: FilterPushdownPhase,
+        parent_filters: Vec<Arc<dyn PhysicalExpr>>,
+        _config: &ConfigOptions,
+    ) -> Result<FilterDescription> {
+        // Pass through to child — PartitionIsolatorExec is a distribution wrapper
+        // that shouldn't block filter propagation (e.g., DynamicFilterPhysicalExpr
+        // from HashJoinExec needs to reach MicropartitionExec through this node).
+        use datafusion::physical_plan::filter_pushdown::ChildFilterDescription;
+        let child = ChildFilterDescription::from_child(&parent_filters, &self.input)?;
+        Ok(FilterDescription::new().with_child(child))
+    }
+
+    fn handle_child_pushdown_result(
+        &self,
+        _phase: FilterPushdownPhase,
+        child_pushdown_result: ChildPushdownResult,
+        _config: &ConfigOptions,
+    ) -> Result<FilterPushdownPropagation<Arc<dyn ExecutionPlan>>> {
+        Ok(FilterPushdownPropagation::if_any(child_pushdown_result))
     }
 }
 

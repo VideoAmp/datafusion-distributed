@@ -4,7 +4,7 @@ use std::fs;
 use std::path::Path;
 
 pub(crate) fn get_queries(path: &str) -> Vec<String> {
-    let queries_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(path);
+    let queries_dir = Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default()).join(path);
     let mut result = vec![];
     for file in queries_dir.read_dir().unwrap() {
         let file = file.unwrap();
@@ -37,7 +37,7 @@ pub(crate) fn get_queries(path: &str) -> Vec<String> {
 }
 
 pub(crate) fn get_query(path: &str, id: &str) -> Result<String, DataFusionError> {
-    let queries_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(path);
+    let queries_dir = Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default()).join(path);
 
     if !queries_dir.exists() {
         return internal_err!(
