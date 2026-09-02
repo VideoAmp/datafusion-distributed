@@ -13,7 +13,7 @@ macro_rules! assert_snapshot {
 
 pub fn settings() -> insta::Settings {
     // Safety: this is only used in tests, it may panic if used in parallel with other tests.
-    unsafe { env::set_var("INSTA_WORKSPACE_ROOT", env!("CARGO_MANIFEST_DIR")) };
+    unsafe { env::set_var("INSTA_WORKSPACE_ROOT", std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default()) };
     let mut settings = insta::Settings::clone_current();
     let cwd = env::current_dir().unwrap();
     let cwd = cwd.to_str().unwrap();
